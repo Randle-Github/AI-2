@@ -1,0 +1,41 @@
+TRAIN:
+  ENABLE: False
+  BS: 64
+  LR: 0.01
+  LR_EPOCHES: 100
+  EPOCHES: 30
+  MAX_LENGTH: 30
+  PLOT: True # 是否进行整体curve的绘制
+TEST:
+  ENABLE: True # 是否进行测试
+RESNET:
+  ENABLE: False # Here only generate features of flicker8k by resnet50 pretrained
+  TYPE: 50 # 50, 101
+  FIXED: True # 是否固定编码器参数
+  PRETRAINED: True # 是否加载预训练权重
+MODEL:
+  NAME: RNN # RNN, GRU, TRANSFORMER
+DATASET:
+  NAME: DATA # DATA, FLICKER8K
+  ROOT: "data" # "data", "flicker8k"
+GPU: [0,1,2,3] # [0, 1, 2, 3], None
+RNN:
+  ENG: 649 # 英语648个词
+  FRA: 856 # 法语855个词
+  INPUT_SIZE: 256 # 词语embedding维度
+  HIDDEN_SIZE: 256
+  OUTPUT_SIZE: 649 # 翻译成英语
+  NUM_LAYERS: 1
+  BIDIRECTIONAL: False
+  DROPOUT: 0.
+GRU:
+  INPUT_SIZE: 10
+  HIDDEN_SIZE: 256
+  OUTPUT_SIZE: 10
+  LAYER_NUM: 1
+  BIDIRECTION: False
+  DROPOUT: 0.
+TRANSFORMER:
+  INPUT_SIZE: 10
+  HIDDEN_SIZE: 256
+  LAYER_NUM: 1
