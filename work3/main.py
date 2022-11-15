@@ -37,7 +37,7 @@ def main():
 loss_his = []
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, criterion, 
           max_length=MAX_LENGTH):
-    encoder_hidden = encoder.initHidden()
+    encoder_hidden = encoder.initHidden().to(device)
 
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
@@ -45,7 +45,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     input_length = input_tensor.size(0)
     target_length = target_tensor.size(0)
 
-    encoder_outputs = torch.zeros(max_length, encoder.hidden_size)
+    encoder_outputs = torch.zeros(max_length, encoder.hidden_size).to(device)
 
     loss = 0.
     for ei in range(input_length):
@@ -56,7 +56,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
         #######End#######
     
     # decoder_input = torch.tensor([[SOS_token]], device=device)
-    decoder_hidden = encoder_hidden
+    decoder_hidden = encoder_hidden.to(device)
     for di in range(target_length):
         
         # 完成训练部分代码
@@ -89,8 +89,8 @@ def trainIters(encoder, decoder, epoches, print_every=100, plot_every=100, learn
     for iter in range(1, epoches + 1):
         
         training_pair = training_pairs[iter - 1]
-        input_tensor = training_pair[0]
-        target_tensor = training_pair[1]
+        input_tensor = training_pair[0].cuda()
+        target_tensor = training_pair[1].cuda()
         loss = train(input_tensor, target_tensor, encoder,
         decoder, encoder_optimizer, decoder_optimizer, criterion)
 
@@ -112,7 +112,7 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
     with torch.no_grad():
         input_tensor = tensorFromSentence(input_lang, sentence)
         input_length = input_tensor.size()[0]
-        encoder_hidden = encoder.initHidden()
+        encoder_hidden = encoder.initHidden().cuda()
 
         encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
 
@@ -134,34 +134,133 @@ def evaluate(encoder, decoder, sentence, max_length=MAX_LENGTH):
 
         return decoded_words
 
+def trainIters(encoder, decoder, epoches, print_every=100, plot_every=100, learning_rate=0.01):
+    global loss_his
+    plot_losses = []
+    print_loss_total = 0  # Reset every print_every
+    plot_loss_total = 0  # Reset every plot_every
+    
+    encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
+    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+
+    training_pairs = [tensorsFromPair(random.choice(pairs))
+                      for i in range(epoches)] # 每次只能pick一个样本
+    criterion = nn.NLLLoss()
+
+    for iter in range(1, epoches + 1):
+        
+        training_pair = training_pairs[iter - 1]
+        input_tensor = training_pair[0].cuda()
+        target_tensor = training_pair[1].cuda()
+        loss = train(input_tensor, target_tensor, encoder,
+        decoder, encoder_optimizer, decoder_optimizer, criterion)
+
+        print_loss_total += loss
+        plot_loss_total += loss
+
+        if iter % print_every == 0:
+            print_loss_avg = print_loss_total / print_every
+            print(iter, "/", epoches, ": ",  print_loss_avg)
+            print_loss_total = 0
+            loss_his.append(float(loss))
+
+        if iter % plot_every == 0:
+            plot_loss_avg = plot_loss_total / plot_every
+            plot_losses.append(plot_loss_avg)
+            plot_loss_total = 0
+
+def CapTrainIters(decoder, epoches, print_every=100, plot_every=100, learning_rate=0.01):
+    global loss_his
+    plot_losses = []
+    print_loss_total = 0  # Reset every print_every
+    plot_loss_total = 0  # Reset every plot_every
+    
+    decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
+
+    training_pairs = [tensorsFromPair(random.choice(pairs))
+                      for i in range(epoches)] # 每次只能pick一个样本
+    criterion = nn.NLLLoss()
+
+    for iter in range(1, epoches + 1):
+        
+        training_pair = training_pairs[iter - 1]
+        input_tensor = training_pair[0].cuda()
+        target_tensor = training_pair[1].cuda()
+        loss = train(input_tensor, target_tensor, encoder,
+        decoder, encoder_optimizer, decoder_optimizer, criterion)
+
+        print_loss_total += loss
+        plot_loss_total += loss
+
+        if iter % print_every == 0:
+            print_loss_avg = print_loss_total / print_every
+            print(iter, "/", epoches, ": ",  print_loss_avg)
+            print_loss_total = 0
+            loss_his.append(float(loss))
+
+        if iter % plot_every == 0:
+            plot_loss_avg = plot_loss_total / plot_every
+            plot_losses.append(plot_loss_avg)
+            plot_loss_total = 0
+
 if __name__ == "__main__":
     cfg = get_config("config.yaml")
-    encoder1, decoder1 = get_model(cfg)
-    encoder1.to(device)
-    decoder1.to(device)
 
-    if cfg["TRAIN"]["ENABLE"]:
-        trainIters(encoder1, decoder1, 10000, print_every=1000, learning_rate=0.01)
-        trainIters(encoder1, decoder1, 10000, print_every=1000, learning_rate=0.001)
-        trainIters(encoder1, decoder1, 10000, print_every=1000, learning_rate=0.0001)
-        torch.save(encoder1.state_dict(), "encoder1.pth")
-        torch.save(decoder1.state_dict(), "decoder1.pth")
-        if cfg["TRAIN"]["PLOT"]:
-            plt.title("Training Loss Curve")
-            plt.plot(np.arange(len(loss_his)) * 100, loss_his, color='green')
-            plt.show()
-    else: # directly load state_dict
-        state1 = torch.load("encoder1.pth")
-        state2 = torch.load("decoder1.pth")
-        encoder1.load_state_dict(state1)
-        decoder1.load_state_dict(state2)
+    # translatoin
 
-    if cfg["TEST"]["ENABLE"]:
-        pair = random.choice(pairs)
-        test_sentence = pair[0]
-        translated_sentence = evaluate(encoder1, decoder1, test_sentence)
-        print("original sentence: {}\ntarget_sentence: {}\ntranslated_sentence: ".format(pair[0],pair[1]), end="")
-        for word in translated_sentence:
-            if word == "<EOS>":
-                break
-            print(word, end = " ")
+    if cfg["DATASET"]["NAME"] == "DATA":
+        encoder1, decoder1 = get_model(cfg)
+        encoder1.to(device)
+        decoder1.to(device)
+
+        if cfg["TRAIN"]["ENABLE"]:
+            trainIters(encoder1, decoder1, 10000, print_every=1000, learning_rate=0.01)
+            trainIters(encoder1, decoder1, 10000, print_every=1000, learning_rate=0.001)
+            trainIters(encoder1, decoder1, 10000, print_every=1000, learning_rate=0.0001)
+            torch.save(encoder1.state_dict(), "encoder1.pth")
+            torch.save(decoder1.state_dict(), "decoder1.pth")
+            if cfg["TRAIN"]["PLOT"]:
+                plt.title("Training Loss Curve")
+                plt.plot(np.arange(len(loss_his)) * 100, loss_his, color='green')
+                plt.savefig("results.png")
+        else: # directly load state_dict
+            state1 = torch.load("encoder1.pth")
+            state2 = torch.load("decoder1.pth")
+            encoder1.load_state_dict(state1)
+            decoder1.load_state_dict(state2)
+
+        if cfg["TEST"]["ENABLE"]:
+            pair = random.choice(pairs)
+            test_sentence = pair[0]
+            translated_sentence = evaluate(encoder1, decoder1, test_sentence)
+            print("original sentence: {}\ntarget_sentence: {}\ntranslated_sentence: ".format(pair[0],pair[1]), end="")
+            for word in translated_sentence:
+                if word == "<EOS>":
+                    break
+                print(word, end = " ")
+    
+    # flicker8k
+
+    elif cfg["DATASET"]["NAME"] == "FLICKER8K":
+        dataset = Flicker8k(cfg)
+        model = get_model(cfg)
+        model = model.cuda()
+        features = torch.zeros([len(dataset), 1000])
+        if cfg["RESNET"]["ENABLE"]: # 预处理部分
+            with torch.no_grad():
+                dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+                idx = 0
+                for img, cap in dataloader:
+                    feat = model(img.cuda())
+                    features[idx] = feat[0].cpu()
+            torch.save(features, "data/features.pth")
+        else:
+            dataset = Flicker8k(cfg)
+            model = get_model(cfg)
+            model = model.cuda()
+            features = torch.zeros([len(dataset), 1000])
+            trainIters(model, 10000, print_every=1000, learning_rate=0.01)
+            trainIters(model, 10000, print_every=1000, learning_rate=0.001)
+            trainIters(model, 10000, print_every=1000, learning_rate=0.0001)
+    else:
+        raise Exception("No such dataset!")
